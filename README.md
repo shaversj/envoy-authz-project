@@ -18,20 +18,21 @@ real policy before using it in production.
 
 ## Run locally with Make
 
-Start the authorization service and backend together:
+Start each component in a separate terminal:
 
 ```bash
-make services
-```
+# Terminal 1
+make authz
 
-Start Envoy in a second terminal:
+# Terminal 2
+make backend
 
-```bash
+# Terminal 3
 make envoy
 ```
 
-Envoy listens on `127.0.0.1:8080`. Press `Ctrl+C` in each terminal to stop
-the processes.
+Envoy listens on `127.0.0.1:8080`. Press `Ctrl+C` in each terminal to stop its
+process.
 
 Available targets:
 
@@ -39,7 +40,6 @@ Available targets:
 | --- | --- |
 | `make` or `make help` | Show the main commands |
 | `make sync` | Install and synchronize Python dependencies with `uv` |
-| `make services` | Run the authorization service and backend together |
 | `make authz` | Run only the authorization service on port 8000 |
 | `make backend` | Run only the backend on port 8081 |
 | `make envoy` | Run Envoy with `envoy.yaml` |
@@ -52,7 +52,8 @@ Available targets:
 Make variables can override the local defaults:
 
 ```bash
-make services HOST=127.0.0.1 AUTHZ_PORT=8000 BACKEND_PORT=8081
+make authz HOST=127.0.0.1 AUTHZ_PORT=8000
+make backend HOST=127.0.0.1 BACKEND_PORT=8081
 make envoy ENVOY_CONFIG=envoy.yaml
 ```
 
