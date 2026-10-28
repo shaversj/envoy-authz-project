@@ -16,22 +16,44 @@ while using Envoy's native HTTP authorization transport:
 This is a deliberately simple example. Replace the static token check with your
 real policy before using it in production.
 
-## Run the service
+## Run locally with Make
 
-Run both FastAPI services in one terminal:
+Start the authorization service and backend together:
 
 ```bash
 make services
 ```
 
-Press `Ctrl+C` to stop both services. To run either service by itself, use
-`make authz` or `make backend`.
-
-The equivalent authorization-service command is:
+Start Envoy in a second terminal:
 
 ```bash
-uv sync
-uv run uvicorn envoy_authz.app:app --host 0.0.0.0 --port 8000
+make envoy
+```
+
+Envoy listens on `127.0.0.1:8080`. Press `Ctrl+C` in each terminal to stop
+the processes.
+
+Available targets:
+
+| Command | Purpose |
+| --- | --- |
+| `make` or `make help` | Show the main commands |
+| `make sync` | Install and synchronize Python dependencies with `uv` |
+| `make services` | Run the authorization service and backend together |
+| `make authz` | Run only the authorization service on port 8000 |
+| `make backend` | Run only the backend on port 8081 |
+| `make envoy` | Run Envoy with `envoy.yaml` |
+| `make test` | Run the Python tests |
+| `make lint` | Run Ruff lint checks |
+| `make format-check` | Check Python formatting |
+| `make envoy-validate` | Validate the Envoy configuration |
+| `make check` | Run all project validation checks |
+
+Make variables can override the local defaults:
+
+```bash
+make services HOST=127.0.0.1 AUTHZ_PORT=8000 BACKEND_PORT=8081
+make envoy ENVOY_CONFIG=envoy.yaml
 ```
 
 Configuration is read when the application starts:
@@ -46,12 +68,6 @@ The service exposes:
 - `GET /healthz` for health checks
 - `/authorize` for Envoy authorization checks; all common HTTP methods are
   accepted because Envoy preserves the original request method
-
-## Run the backend
-
-```bash
-uv run uvicorn backend_server.app:app --host 0.0.0.0 --port 8081
-```
 
 The backend accepts requests on any path, returns `ok`, and adds
 `x-custom-header-from-backend: from backend` to its response. It logs request
@@ -73,17 +89,7 @@ The included [`envoy.yaml`](envoy.yaml) expects:
 - an HTTP backend at `127.0.0.1:8081`
 - Envoy ingress at `127.0.0.1:8080`
 
-For a local demonstration, use two terminals:
-
-```bash
-# Terminal 1: authorization service and protected backend
-make services HOST=127.0.0.1
-
-# Terminal 2: Envoy
-make envoy
-```
-
-Then call Envoy:
+After starting the services with the Make commands above, call Envoy:
 
 ```bash
 curl -i http://127.0.0.1:8080/
