@@ -1,8 +1,12 @@
-# Envoy HTTP external authorization service
+# Envoy HTTP external authorization example
 
-A small FastAPI service that implements Envoy's HTTP `ext_authz` contract. It
-mirrors the behavior of the referenced Go example while using Envoy's native
-HTTP authorization transport:
+Two small FastAPI services demonstrate Envoy external authorization end to end:
+
+- `envoy_authz` implements Envoy's HTTP `ext_authz` contract.
+- `backend_server` is the protected upstream service.
+
+The authorization service mirrors the behavior of the referenced Go example
+while using Envoy's native HTTP authorization transport:
 
 - `Authorization: Bearer foo` returns `200 OK` and adds
   `x-custom-header-from-authz: some value` to the upstream request.
@@ -32,6 +36,16 @@ The service exposes:
 - `/authorize` for Envoy authorization checks; all common HTTP methods are
   accepted because Envoy preserves the original request method
 
+## Run the backend
+
+```bash
+uv run uvicorn backend_server.app:app --host 0.0.0.0 --port 8081
+```
+
+The backend accepts requests on any path, returns `ok`, and adds
+`x-custom-header-from-backend: from backend` to its response. It logs request
+methods, paths, and header names without logging authorization header values.
+
 ## Try it directly
 
 ```bash
@@ -54,8 +68,8 @@ For a local demonstration, use three terminals:
 # Terminal 1: authorization service
 uv run uvicorn envoy_authz.app:app --host 127.0.0.1 --port 8000
 
-# Terminal 2: disposable backend
-uv run python -m http.server 8081
+# Terminal 2: protected backend
+uv run uvicorn backend_server.app:app --host 127.0.0.1 --port 8081
 
 # Terminal 3: Envoy
 envoy -c envoy.yaml
@@ -91,5 +105,8 @@ docker build -t envoy-fastapi-authz .
 docker run --rm -p 8000:8000 \
   -e AUTHZ_BEARER_TOKEN=foo \
   envoy-fastapi-authz
+
+docker build -f Dockerfile.backend -t envoy-fastapi-backend .
+docker run --rm -p 8081:8081 envoy-fastapi-backend
 ```
 
