@@ -18,6 +18,17 @@ real policy before using it in production.
 
 ## Run the service
 
+Run both FastAPI services in one terminal:
+
+```bash
+make services
+```
+
+Press `Ctrl+C` to stop both services. To run either service by itself, use
+`make authz` or `make backend`.
+
+The equivalent authorization-service command is:
+
 ```bash
 uv sync
 uv run uvicorn envoy_authz.app:app --host 0.0.0.0 --port 8000
@@ -62,17 +73,14 @@ The included [`envoy.yaml`](envoy.yaml) expects:
 - an HTTP backend at `127.0.0.1:8081`
 - Envoy ingress at `127.0.0.1:8080`
 
-For a local demonstration, use three terminals:
+For a local demonstration, use two terminals:
 
 ```bash
-# Terminal 1: authorization service
-uv run uvicorn envoy_authz.app:app --host 127.0.0.1 --port 8000
+# Terminal 1: authorization service and protected backend
+make services HOST=127.0.0.1
 
-# Terminal 2: protected backend
-uv run uvicorn backend_server.app:app --host 127.0.0.1 --port 8081
-
-# Terminal 3: Envoy
-envoy -c envoy.yaml
+# Terminal 2: Envoy
+make envoy
 ```
 
 Then call Envoy:
@@ -93,9 +101,7 @@ and
 ## Validate changes
 
 ```bash
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
+make check
 ```
 
 ## Container image
