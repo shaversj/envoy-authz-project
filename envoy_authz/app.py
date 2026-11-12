@@ -1,6 +1,5 @@
 import logging
 import os
-import secrets
 from dataclasses import dataclass
 
 from fastapi import FastAPI, Request, Response
@@ -21,13 +20,13 @@ AUTHORIZATION_METHODS = [
 
 @dataclass(frozen=True)
 class Settings:
-    bearer_token: str
+    required_scope: str
     upstream_header_value: str
 
     @classmethod
     def from_environment(cls) -> "Settings":
         return cls(
-            bearer_token=os.getenv("AUTHZ_BEARER_TOKEN", "foo"),
+            required_scope=os.getenv("AUTHZ_REQUIRED_SCOPE", "backend.read"),
             upstream_header_value=os.getenv(
                 "AUTHZ_UPSTREAM_HEADER_VALUE",
                 "some value",
@@ -37,7 +36,6 @@ class Settings:
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     resolved_settings = settings or Settings.from_environment()
-    expected_bearer_token = resolved_settings.bearer_token.encode()
     app = FastAPI(
         title="Envoy HTTP External Authorization",
         docs_url=None,
@@ -51,34 +49,41 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.api_route("/authorize", methods=AUTHORIZATION_METHODS)
     async def authorize(request: Request) -> Response:
-        authorization = request.headers.get("authorization")
-        parts = authorization.split() if authorization else []
+        subject = request.headers.get("x-authenticated-subject", "").strip()
 
-        if len(parts) != 2 or parts[0].lower() != "bearer":
+        if not subject:
             logger.info(
-                "Authorization denied: malformed or missing header",
+                "Authorization denied: verified identity missing",
                 extra={"method": request.method, "path": request.url.path},
             )
             return PlainTextResponse(
-                "Authorization header malformed or not provided",
+                "Verified identity is required",
                 status_code=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        if not secrets.compare_digest(parts[1].encode(), expected_bearer_token):
+        scopes = set(request.headers.get("x-authenticated-scope", "").split())
+        if resolved_settings.required_scope not in scopes:
             logger.info(
-                "Authorization denied: invalid bearer token",
-                extra={"method": request.method, "path": request.url.path},
+                "Authorization denied: required scope missing",
+                extra={
+                    "method": request.method,
+                    "path": request.url.path,
+                    "subject": subject,
+                },
             )
             return PlainTextResponse(
                 "PERMISSION_DENIED",
-                status_code=401,
-                headers={"WWW-Authenticate": "Bearer"},
+                status_code=403,
             )
 
         logger.info(
             "Authorization allowed",
-            extra={"method": request.method, "path": request.url.path},
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "subject": subject,
+            },
         )
         return Response(
             status_code=200,

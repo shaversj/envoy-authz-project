@@ -14,12 +14,10 @@ def anyio_backend() -> str:
 async def request(
     method: str,
     path: str,
-    *,
-    token: str = "foo",
     **kwargs: Any,
 ) -> Response:
     settings = Settings(
-        bearer_token=token,
+        required_scope="backend.read",
         upstream_header_value="some value",
     )
     transport = ASGITransport(app=create_app(settings))
@@ -28,7 +26,7 @@ async def request(
 
 
 @pytest.mark.anyio
-async def test_health_check_does_not_require_authorization() -> None:
+async def test_health_check_does_not_require_identity() -> None:
     response = await request("GET", "/healthz")
 
     assert response.status_code == 200
@@ -36,11 +34,14 @@ async def test_health_check_does_not_require_authorization() -> None:
 
 
 @pytest.mark.anyio
-async def test_valid_bearer_token_allows_request_and_sets_upstream_header() -> None:
+async def test_verified_identity_with_required_scope_is_allowed() -> None:
     response = await request(
         "GET",
         "/authorize",
-        headers={"Authorization": "Bearer foo"},
+        headers={
+            "x-authenticated-subject": "test-user",
+            "x-authenticated-scope": "profile backend.read",
+        },
     )
 
     assert response.status_code == 200
@@ -53,53 +54,38 @@ async def test_authorization_endpoint_accepts_non_get_methods() -> None:
     response = await request(
         "POST",
         "/authorize",
-        headers={"Authorization": "Bearer foo"},
+        headers={
+            "x-authenticated-subject": "test-user",
+            "x-authenticated-scope": "backend.read",
+        },
     )
 
     assert response.status_code == 200
 
 
 @pytest.mark.anyio
-async def test_invalid_bearer_token_is_denied() -> None:
+async def test_missing_verified_identity_is_unauthorized() -> None:
     response = await request(
         "GET",
         "/authorize",
-        headers={"Authorization": "Bearer bar"},
+        headers={"x-authenticated-scope": "backend.read"},
     )
 
     assert response.status_code == 401
-    assert response.text == "PERMISSION_DENIED"
+    assert response.text == "Verified identity is required"
     assert response.headers["www-authenticate"] == "Bearer"
 
 
 @pytest.mark.anyio
-async def test_missing_authorization_header_is_denied() -> None:
-    response = await request("GET", "/authorize")
-
-    assert response.status_code == 401
-    assert response.text == "Authorization header malformed or not provided"
-    assert response.headers["www-authenticate"] == "Bearer"
-
-
-@pytest.mark.anyio
-async def test_malformed_authorization_header_is_denied() -> None:
+async def test_verified_identity_without_required_scope_is_forbidden() -> None:
     response = await request(
         "GET",
         "/authorize",
-        headers={"Authorization": "Basic Zm9vOmJhcg=="},
+        headers={
+            "x-authenticated-subject": "test-user",
+            "x-authenticated-scope": "profile",
+        },
     )
 
-    assert response.status_code == 401
-    assert response.text == "Authorization header malformed or not provided"
-
-
-@pytest.mark.anyio
-async def test_non_ascii_bearer_token_is_denied_without_server_error() -> None:
-    response = await request(
-        "GET",
-        "/authorize",
-        headers=[(b"authorization", b"Bearer caf\xe9")],
-    )
-
-    assert response.status_code == 401
+    assert response.status_code == 403
     assert response.text == "PERMISSION_DENIED"
