@@ -5,12 +5,14 @@ UV ?= uv
 HOST ?= 0.0.0.0
 AUTHZ_PORT ?= 8000
 BACKEND_PORT ?= 8081
+ISSUER_PORT ?= 8002
 ENVOY_CONFIG ?= envoy.yaml
 
-.PHONY: help sync authz backend envoy test lint format-check envoy-validate check
+.PHONY: help sync issuer authz backend envoy test lint format-check envoy-validate check
 
 help:
 	@printf '%s\n' \
+		'make issuer          Run the development JWT issuer' \
 		'make authz           Run only the authorization service' \
 		'make backend         Run only the backend service' \
 		'make envoy           Run Envoy with the project configuration' \
@@ -18,6 +20,9 @@ help:
 
 sync:
 	$(UV) sync
+
+issuer: sync
+	$(UV) run uvicorn jwt_issuer.app:app --host $(HOST) --port $(ISSUER_PORT)
 
 authz: sync
 	$(UV) run uvicorn envoy_authz.app:app --host $(HOST) --port $(AUTHZ_PORT)
